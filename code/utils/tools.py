@@ -29,7 +29,7 @@ def downstream_task_new(data, task_type):
     X = data.iloc[:, :-1]
     y = data.iloc[:, -1].astype(float)
     if task_type == 'cls':
-        clf = RandomForestClassifier(random_state=0, n_jobs=128)
+        clf = RandomForestClassifier(random_state=0, n_jobs=-1)
         f1_list = []
         skf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
         for train, test in skf.split(X, y):
@@ -41,7 +41,7 @@ def downstream_task_new(data, task_type):
         return np.mean(f1_list)
     elif task_type == 'reg':
         kf = KFold(n_splits=5, random_state=0, shuffle=True)
-        reg = RandomForestRegressor(random_state=0, n_jobs=128)
+        reg = RandomForestRegressor(random_state=0, n_jobs=-1)
         rae_list = []
         for train, test in kf.split(X):
             X_train, y_train, X_test, y_test = X.iloc[train, :], y.iloc[train
@@ -51,7 +51,7 @@ def downstream_task_new(data, task_type):
             rae_list.append(1 - relative_absolute_error(y_test, y_predict))
         return np.mean(rae_list)
     elif task_type == 'det':
-        knn = KNeighborsClassifier(n_neighbors=5, n_jobs=128)
+        knn = KNeighborsClassifier(n_neighbors=5, n_jobs=-1)
         skf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
         ras_list = []
         for train, test in skf.split(X, y):
@@ -62,7 +62,7 @@ def downstream_task_new(data, task_type):
             ras_list.append(roc_auc_score(y_test, y_predict))
         return np.mean(ras_list)
     elif task_type == 'mcls':
-        clf = OneVsRestClassifier(RandomForestClassifier(random_state=0, n_jobs=128))
+        clf = OneVsRestClassifier(RandomForestClassifier(random_state=0, n_jobs=-1))
         pre_list, rec_list, f1_list, auc_roc_score = [], [], [], []
         skf = StratifiedKFold(n_splits=5, random_state=0, shuffle=True)
         for train, test in skf.split(X, y):
@@ -82,18 +82,18 @@ def downstream_task_by_method(data, task_type, method='RF'):
     y = data.iloc[:, -1].astype(float)
     if method == 'RF':
         if task_type == 'cls':
-            model = RandomForestClassifier(random_state=0, n_jobs=128)
+            model = RandomForestClassifier(random_state=0, n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(RandomForestClassifier(random_state=0), n_jobs=128)
+            model = OneVsRestClassifier(RandomForestClassifier(random_state=0), n_jobs=-1)
         else:
-            model = RandomForestRegressor(random_state=0, n_jobs=128)
+            model = RandomForestRegressor(random_state=0, n_jobs=-1)
     elif method == 'XGB':
         if task_type == 'cls':
-            model = XGBClassifier(eval_metric='logloss', n_jobs=128)
+            model = XGBClassifier(eval_metric='logloss', n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(XGBClassifier(eval_metric='logloss'), n_jobs=128)
+            model = OneVsRestClassifier(XGBClassifier(eval_metric='logloss'), n_jobs=-1)
         else:
-            model = XGBRegressor(eval_metric='logloss', n_jobs=128)
+            model = XGBRegressor(eval_metric='logloss', n_jobs=-1)
     elif method == 'SVM':
         if task_type == 'cls':
             model = LinearSVC()
@@ -103,30 +103,30 @@ def downstream_task_by_method(data, task_type, method='RF'):
             model = LinearSVR()
     elif method == 'KNN':
         if task_type == 'cls':
-            model = KNeighborsClassifier(n_jobs=128)
+            model = KNeighborsClassifier(n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(KNeighborsClassifier(), n_jobs=128)
+            model = OneVsRestClassifier(KNeighborsClassifier(), n_jobs=-1)
         else:
-            model = KNeighborsRegressor(n_jobs=128)
+            model = KNeighborsRegressor(n_jobs=-1)
     elif method == 'Ridge':
         if task_type == 'cls':
             model = RidgeClassifier()
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(RidgeClassifier(), n_jobs=128)
+            model = OneVsRestClassifier(RidgeClassifier(), n_jobs=-1)
         else:
             model = Ridge()
     elif method == 'LASSO':
         if task_type == 'cls':
-            model = LogisticRegression(penalty='l1',solver='liblinear', n_jobs=128)
+            model = LogisticRegression(penalty='l1',solver='liblinear', n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(LogisticRegression(penalty='l1',solver='liblinear'), n_jobs=128)
+            model = OneVsRestClassifier(LogisticRegression(penalty='l1',solver='liblinear'), n_jobs=-1)
         else:
             model = Lasso()
     else:  # dt
         if task_type == 'cls':
             model = DecisionTreeClassifier()
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(DecisionTreeClassifier(), n_jobs=128)
+            model = OneVsRestClassifier(DecisionTreeClassifier(), n_jobs=-1)
         else:
             model = DecisionTreeRegressor()
 
@@ -169,18 +169,18 @@ def downstream_task_by_method_std(data, task_type, method='RF'):
     y = data.iloc[:, -1].astype(float)
     if method == 'RF':
         if task_type == 'cls':
-            model = RandomForestClassifier(random_state=0, n_jobs=128)
+            model = RandomForestClassifier(random_state=0, n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(RandomForestClassifier(random_state=0), n_jobs=128)
+            model = OneVsRestClassifier(RandomForestClassifier(random_state=0), n_jobs=-1)
         else:
-            model = RandomForestRegressor(random_state=0, n_jobs=128)
+            model = RandomForestRegressor(random_state=0, n_jobs=-1)
     elif method == 'XGB':
         if task_type == 'cls':
-            model = XGBClassifier(eval_metric='logloss', n_jobs=128)
+            model = XGBClassifier(eval_metric='logloss', n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(XGBClassifier(eval_metric='logloss'), n_jobs=128)
+            model = OneVsRestClassifier(XGBClassifier(eval_metric='logloss'), n_jobs=-1)
         else:
-            model = XGBRegressor(eval_metric='logloss', n_jobs=128)
+            model = XGBRegressor(eval_metric='logloss', n_jobs=-1)
     elif method == 'SVM':
         if task_type == 'cls':
             model = LinearSVC()
@@ -190,30 +190,30 @@ def downstream_task_by_method_std(data, task_type, method='RF'):
             model = LinearSVR()
     elif method == 'KNN':
         if task_type == 'cls':
-            model = KNeighborsClassifier(n_jobs=128)
+            model = KNeighborsClassifier(n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(KNeighborsClassifier(), n_jobs=128)
+            model = OneVsRestClassifier(KNeighborsClassifier(), n_jobs=-1)
         else:
-            model = KNeighborsRegressor(n_jobs=128)
+            model = KNeighborsRegressor(n_jobs=-1)
     elif method == 'Ridge':
         if task_type == 'cls':
             model = RidgeClassifier()
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(RidgeClassifier(), n_jobs=128)
+            model = OneVsRestClassifier(RidgeClassifier(), n_jobs=-1)
         else:
             model = Ridge()
     elif method == 'LASSO':
         if task_type == 'cls':
-            model = LogisticRegression(penalty='l1',solver='liblinear', n_jobs=128)
+            model = LogisticRegression(penalty='l1',solver='liblinear', n_jobs=-1)
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(LogisticRegression(penalty='l1',solver='liblinear'), n_jobs=128)
+            model = OneVsRestClassifier(LogisticRegression(penalty='l1',solver='liblinear'), n_jobs=-1)
         else:
             model = Lasso()
     else:  # dt
         if task_type == 'cls':
             model = DecisionTreeClassifier()
         elif task_type == 'mcls':
-            model = OneVsRestClassifier(DecisionTreeClassifier(), n_jobs=128)
+            model = OneVsRestClassifier(DecisionTreeClassifier(), n_jobs=-1)
         else:
             model = DecisionTreeRegressor()
 

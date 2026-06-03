@@ -65,7 +65,7 @@ def process(task_name_):
 
 if __name__ == '__main__':
 
-    task_list = ['german_credit']                                  
+    task_list = ['megawatt1']                                  
     for name in task_list:
         task_name = name
         process(task_name)

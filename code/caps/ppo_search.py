@@ -37,9 +37,12 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--new_gen', type=int, default=200)
-parser.add_argument('--task_name', type=str, choices=['spectf', 'svmguide3', 'german_credit', 'uci_credit_card','spam_base','megawatt1','ionosphere',
-                                                      'mice_protein', 'coil-20', 'minist_fashion', 'urbansound8k',
-                                                      'openml_589', 'openml_616', 'IQdataset'], default='svmguide3')
+parser.add_argument('--task_name', type=str, choices=['spectf', 'svmguide3', 'german_credit', 'spam_base',
+                                                      'ionosphere', 'megawatt1', 'uci_credit_card', 'openml_618',
+                                                      'openml_589', 'openml_616', 'openml_607', 'openml_620',
+                                                      'openml_637',
+                                                      'openml_586', 'uci_credit_card', 'higgs', 'ap_omentum_ovary','activity'
+                                                      , 'mice_protein', 'coil-20', 'isolet', 'minist', 'minist_fashion'], default='german_credit')
 
 parser.add_argument('--gpu', type=int, default=0, help='used gpu')
 parser.add_argument('--fe', type=str, choices=['+', '', '-'], default='-')
@@ -55,7 +58,7 @@ parser.add_argument('--gamma', type=float, default=0.99)
 parser.add_argument('--search_step', type=int, default=1000)
 parser.add_argument('--ppo_hidden_size', type=int, default=128)
 # 迭代次数
-parser.add_argument('--epoch', type=int, default=10)
+parser.add_argument('--epoch', type=int, default=1)
 parser.add_argument('--set_tf_arch', type=str, choices=['SAB','ISAB'],default='ISAB')
 parser.add_argument('--set_tf_hidden_size', type=int,default=128)
 
@@ -70,16 +73,15 @@ baseline_name = [
     'rfe',
     'lassonet',
     'gfs',
-    'sarlfs',  # feature_env, N_STATES, N_ACTIONS, EPISODE=-1, EXPLORE_STEPS=30
-    'marlfs',  # feature_env, N_STATES, N_ACTIONS, EPISODE=-1, EXPLORE_STEPS=30
+    'sarlfs',
+    'marlfs',
     'rra',
     'mcdm',
     'gains'
 ]
+
 def count_parameters_in_MB(model):
     return np.sum(np.prod(v.size()) for name, v in model.named_parameters() if "auxiliary" not in name)/1e6
-
-
 
 def choice_to_onehot(choice, eos):
     new_choice = []
@@ -103,10 +105,12 @@ def get_reward(state, fe, epoch, epoches):
     reward_list = torch.empty(state.size(0), 1)
     print(f'{epoch}/{epoches} trajectroy collecting....')
     for i in range(state.shape[0]):
-        reward = fe.report_performance(state[i].numpy(),rp=False, flag='test')
+        # 【修改点1：彻底杜绝泄题】把 flag='test' 改为 flag='train'
+        reward = fe.report_performance(state[i].numpy(),rp=False, flag='train')
         reward_list[i] = reward
     print(f'{epoch}/{epoches}trajectroy collected!!!')
     return reward_list
+
 def ppo_search(queue,ppo,set_tf,feat_len, epoches, fe, reward_weight):
     ppo.train()
     set_tf.eval()
@@ -158,61 +162,123 @@ def ppo_search(queue,ppo,set_tf,feat_len, epoches, fe, reward_weight):
 
         new_choice_pt = torch.stack(new_choice)
 
-        best_selection_test = None
-        best_optimal_test = -1000
+        # 【修改点2：规矩挑人】只允许在 80% 的训练集里挑最好的特征
+        best_selection_train = None
+        best_optimal_train = -1000
         for s in new_selection:
-            test_data = fe.generate_data(s.operation, 'test')
-            test_result = fe.get_performance(test_data)
-            if test_result > best_optimal_test:
-                best_selection_test = s.operation
-                best_optimal_test = test_result
-                info(f'found best on test : {best_optimal_test}')
+            train_data = fe.generate_data(s.operation, 'train')
+            train_result = fe.get_performance(train_data)
+            if train_result > best_optimal_train:
+                best_selection_train = s.operation
+                best_optimal_train = train_result
+                info(f'found best on train : {best_optimal_train}')
 
-        test_p = fe.report_performance(best_selection_test, flag='test')
-
-        save_path = f'{base_path}/history/{fe.task_name}/ppo/{args.ppo_hidden_size}_{args.eps_clip}_{args.reward_tradeoff}_{test_p * 100}'
+        # ================== 【修改点3：真正的闭卷大考（全任务类型支持版）】 ==================
+        save_path = f'{base_path}/history/{fe.task_name}/ppo/{args.ppo_hidden_size}_{args.eps_clip}_{args.reward_tradeoff}_final'
         os.makedirs(save_path, exist_ok=True)
         opt_path_test = os.path.join(save_path, 'best-ppo-results.hdf')
-       # === 自动生成【全指标】成绩单 txt ===
-        report_txt_path = os.path.join(save_path, '最终成绩单.txt')
-        
-        # 重新调一次评估函数，把四项分数全拿出来
-        from utils.tools import test_task_new
-        test_data_for_eval = fe.generate_data(best_selection_test, 'test')
-        pre, rec, f1, auc = test_task_new(test_data_for_eval, task='cls')
+        report_txt_path = os.path.join(save_path, '真正泛化成绩单.txt')
 
+        # 1. 剪裁出只包含黄金特征的 80% 训练卷 和 20% 测试卷
+        train_data = fe.generate_data(best_selection_train, 'train')
+        test_data  = fe.generate_data(best_selection_train, 'test')
+
+        X_train, y_train = train_data.iloc[:, :-1], train_data.iloc[:, -1]
+        X_test,  y_test  = test_data.iloc[:, :-1],  test_data.iloc[:, -1]
+
+        # 2. 打开成绩单准备写入，自动识别任务类型
         with open(report_txt_path, 'w', encoding='utf-8') as f:
-            f.write(f"【{args.task_name}】最终战报：\n")
-            f.write(f"------------------------\n")
-            f.write(f"Precision : {pre * 100:.2f}%\n")
-            f.write(f"Recall    : {rec * 100:.2f}%\n")
-            f.write(f"F1-Score  : {f1 * 100:.2f}%\n")
-            f.write(f"ROC/AUC   : {auc * 100:.2f}%\n")
-        # =========================
+            f.write(f"【{args.task_name}】 ({fe.task_type} 任务) 真正泛化战报：\n")
+            f.write(f"----------------------------------------\n")
+
+            # ================== 二分类任务 (Classification) ==================
+            if fe.task_type == 'cls':
+                from sklearn.ensemble import RandomForestClassifier
+                from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
+                
+                clf = RandomForestClassifier(random_state=0, n_jobs=-1)
+                clf.fit(X_train, y_train)
+                y_predict = clf.predict(X_test)
+
+                real_pre = precision_score(y_test, y_predict, average='weighted', zero_division=0)
+                real_rec = recall_score(y_test, y_predict, average='weighted', zero_division=0)
+                real_f1  = f1_score(y_test, y_predict, average='weighted', zero_division=0)
+                try: real_auc = roc_auc_score(y_test, y_predict, average='weighted')
+                except ValueError: real_auc = 0.0
+
+                f.write(f"Precision : {real_pre * 100:.2f}%\n")
+                f.write(f"Recall    : {real_rec * 100:.2f}%\n")
+                f.write(f"F1-Score  : {real_f1 * 100:.2f}%\n")
+                f.write(f"ROC/AUC   : {real_auc * 100:.2f}%\n")
+
+            # ================== 多分类任务 (Multi-Classification) ==================
+            elif fe.task_type == 'mcls':
+                from sklearn.ensemble import RandomForestClassifier
+                from sklearn.multiclass import OneVsRestClassifier
+                from sklearn.metrics import precision_score, recall_score, f1_score
+                
+                # 多分类必须套一层 OneVsRest 壳子
+                clf = OneVsRestClassifier(RandomForestClassifier(random_state=0, n_jobs=-1))
+                clf.fit(X_train, y_train)
+                y_predict = clf.predict(X_test)
+
+                real_pre  = precision_score(y_test, y_predict, average='macro', zero_division=0)
+                real_rec  = recall_score(y_test, y_predict, average='macro', zero_division=0)
+                real_mif1 = f1_score(y_test, y_predict, average='micro', zero_division=0)
+                real_maf1 = f1_score(y_test, y_predict, average='macro', zero_division=0)
+
+                f.write(f"Precision : {real_pre * 100:.2f}%\n")
+                f.write(f"Recall    : {real_rec * 100:.2f}%\n")
+                f.write(f"Micro-F1  : {real_mif1 * 100:.2f}%\n")
+                f.write(f"Macro-F1  : {real_maf1 * 100:.2f}%\n")
+
+            # ================== 回归任务 (Regression) ==================
+            elif fe.task_type == 'reg':
+                from sklearn.ensemble import RandomForestRegressor
+                from sklearn.metrics import mean_absolute_error, mean_squared_error
+                from utils.tools import relative_absolute_error
+                
+                # 回归任务不能用分类器，必须用回归器
+                reg = RandomForestRegressor(random_state=0, n_jobs=-1)
+                reg.fit(X_train, y_train)
+                y_predict = reg.predict(X_test)
+
+                # 按作者原版规则，算的是 1 - 误差（所以数值越高越好）
+                real_mae  = 1 - mean_absolute_error(y_test, y_predict)
+                real_mse  = 1 - mean_squared_error(y_test, y_predict, squared=True)
+                real_rae  = 1 - relative_absolute_error(y_test, y_predict)
+                real_rmse = 1 - mean_squared_error(y_test, y_predict, squared=False)
+
+                f.write(f"1-MAE     : {real_mae:.4f}\n")
+                f.write(f"1-MSE     : {real_mse:.4f}\n")
+                f.write(f"1-RAE     : {real_rae:.4f}\n")
+                f.write(f"1-RMSE    : {real_rmse:.4f}\n")
+
+            # ================== 检测任务 (Detection) ==================
+            elif fe.task_type == 'det':
+                from sklearn.neighbors import KNeighborsClassifier
+                from sklearn.metrics import average_precision_score, f1_score, roc_auc_score, recall_score
+                
+                # 检测任务作者底层指定了 KNN 模型
+                knn = KNeighborsClassifier(n_neighbors=5, n_jobs=-1)
+                knn.fit(X_train, y_train)
+                y_predict = knn.predict(X_test)
+
+                real_map = average_precision_score(y_test, y_predict)
+                real_f1  = f1_score(y_test, y_predict, average='weighted', zero_division=0)
+                try: real_ras = roc_auc_score(y_test, y_predict)
+                except ValueError: real_ras = 0.0
+                real_rec = recall_score(y_test, y_predict, average='weighted', zero_division=0)
+
+                f.write(f"MAP Score : {real_map * 100:.2f}%\n")
+                f.write(f"F1-Score  : {real_f1 * 100:.2f}%\n")
+                f.write(f"ROC/AUC   : {real_ras * 100:.2f}%\n")
+                f.write(f"Recall    : {real_rec * 100:.2f}%\n")
+
+        # 扫尾工作，保存文件
         choice_path = os.path.join(save_path, 'ppo_generated_choice.pt')
-
-        fe.generate_data(best_selection_test, 'train').to_hdf(opt_path_test, key='train')
-        fe.generate_data(best_selection_test, 'test').to_hdf(opt_path_test, key='test')
-        ps = []
-        # info('given overall validation')
-        # report_head = 'RAW\t'
-        # raw_test = pandas.read_hdf(f'{base_path}/history/{fe.task_name}.hdf', key='raw_test')
-        # ps.append('{:.2f}'.format(fe.get_performance(raw_test) * 100))
-
-        # for method in baseline_name:
-        #     report_head += f'{method}\t'
-
-        #     spe_test = pandas.read_hdf(f'{base_path}/history/{fe.task_name}.hdf', key=f'{method}_test')
-        #     ps.append('{:.2f}'.format(fe.get_performance(spe_test) * 100))
-
-        # report_head += 'Ours_Test'
-        # report = ''
-        # print(report_head)
-        # for per in ps:
-        #     report += f'{per}&\t'
-        # report += '{:.2f}&\t'.format(test_p * 100)
-        # print(report)
-
+        fe.generate_data(best_selection_train, 'train').to_hdf(opt_path_test, key='train')
+        fe.generate_data(best_selection_train, 'test').to_hdf(opt_path_test, key='test')
 
         ppo_save_path = os.path.join(save_path, 'ppo.model_dict')
         ppo.save(ppo_save_path)
@@ -223,10 +289,7 @@ def ppo_search(queue,ppo,set_tf,feat_len, epoches, fe, reward_weight):
         info(f'save generated choice to {choice_path}')
     return None
 
-
 def generate_new_records(queue,ppo, set_tf, feat_len):
-    # 作用：站在已有的特征组合上，利用 PPO 智能体在连续空间里“走一步”，
-    #      然后让大模型把新位置翻译回离散的特征，试图考出更高的分数！
     with torch.no_grad():
         # inference
         for i, sample in enumerate(queue):
@@ -241,16 +304,16 @@ def generate_new_records(queue,ppo, set_tf, feat_len):
             new_output = set_tf.infer(new_feat_emb.unsqueeze(1))
             new_records = output_to_state(new_output, encoder_input, feat_len)
     return new_records
+
 def select_top_k(choice: Tensor, labels: Tensor, k:int) -> tuple[Tensor, Tensor]:
     values, indices = torch.topk(labels, k, dim=0)
     return choice[indices.squeeze()], labels[indices.squeeze()]
-
 
 def main():
     if not torch.cuda.is_available():
         info('No GPU found!')
         sys.exit(1)
-    # os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in args.gpu)
+    
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -261,9 +324,12 @@ def main():
     cudnn.deterministic = True
     device = int(args.gpu)
     info(f"Args = {args}")
+    
     with open(f'{base_path}/history/{args.task_name}/new_fe.pkl', 'rb') as f:
         fe: FeatureEvaluator = pickle.load(f)
+        
     set_tf = SetTransformer(fe.ds_size, fe.ds_size, fe.ds_size, args)
+    
     # === 自动寻找最新模型代码 开始 ===
     import glob
     model_dir = f'{base_path}/history/{args.task_name}/set_tf/'
@@ -278,11 +344,9 @@ def main():
     set_tf = set_tf.cuda(device)
 
     ppo_agent = PPO(fe.ds_size, args.set_tf_hidden_size, args.ppo_hidden_size, args.lr_actor, args.lr_critic, args.gamma, args.search_step, args.eps_clip)
-    # ppo_agent.load_state_dict(torch.load(f'{base_path}/history/{args.task_name}/ppo_0.1_0.7818925323269501.model_dict'))
     ppo_agent = ppo_agent.cuda(device)
 
     valid_choice, valid_labels = fe.get_record(0, eos=fe.ds_size)
-
 
     top_selection, top_performance = select_top_k(valid_choice, valid_labels, args.top_k)
 
@@ -290,9 +354,9 @@ def main():
     infer_queue = DataLoader(infer_dataset, batch_size=len(infer_dataset), shuffle=False,
                              pin_memory=True)
 
-
     flag = ppo_search(infer_queue, ppo_agent, set_tf, fe.ds_size, args.epoch, fe, args.reward_tradeoff)
     return flag
+
 if __name__ == '__main__':
     train_set_TF_args.task_name = args.task_name
     main()

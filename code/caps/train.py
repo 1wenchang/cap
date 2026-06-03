@@ -34,7 +34,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--task_name', type=str, choices=['spectf', 'svmguide3', 'german_credit', 'uci_credit_card','spam_base','megawatt1','ionosphere',
                                                       'mice_protein', 'coil-20', 'minist_fashion', 'urbansound8k',
-                                                      'openml_589', 'openml_616', 'IQdataset'], default='svmguide3')
+                                                      'openml_589', 'openml_616', 'IQdataset'], default='spam_base')
 
 parser.add_argument('--gpu', type=int, default=0, help='used gpu')
 parser.add_argument('--fe', type=str, choices=['+', '', '-'], default='-')
