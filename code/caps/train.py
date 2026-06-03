@@ -32,12 +32,9 @@ from sklearn.metrics import accuracy_score, f1_score
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--task_name', type=str, choices=['spectf', 'svmguide3', 'german_credit', 'spam_base',
-                                                      'ionosphere', 'megawatt1', 'uci_credit_card', 'openml_618',
-                                                      'openml_589', 'openml_616', 'openml_607', 'openml_620',
-                                                      'openml_637',
-                                                      'openml_586', 'uci_credit_card', 'higgs', 'ap_omentum_ovary','activity'
-                                                      , 'mice_protein', 'coil-20', 'isolet', 'minist', 'minist_fashion'], default='german_credit')
+parser.add_argument('--task_name', type=str, choices=['spectf', 'svmguide3', 'german_credit', 'uci_credit_card','spam_base','megawatt1','ionosphere',
+                                                      'mice_protein', 'coil-20', 'minist_fashion', 'urbansound8k',
+                                                      'openml_589', 'openml_616', 'IQdataset'], default='svmguide3')
 
 parser.add_argument('--gpu', type=int, default=0, help='used gpu')
 parser.add_argument('--fe', type=str, choices=['+', '', '-'], default='-')
@@ -51,9 +48,11 @@ parser.add_argument('--set_tf_hidden_size', type=int,default=128)
 # parser.add_argument('--grad_bound', type=float, default=6.0)
 args = parser.parse_args()
 
+# 创建一个专门用来计算神经网络有多大、包含多少个参数的小工具。
 def count_parameters_in_MB(model):
     return np.sum(np.prod(v.size()) for name, v in model.named_parameters() if "auxiliary" not in name)/1e6
 
+# 把带有占位符（eos）的浓缩特征索引，清理掉废料后，还原成了最原始、最直白的一长串 0 和 1（选或不选）
 def choice_to_onehot(choice, eos):
     new_choice = []
     eos_batches = choice.data.eq(eos)
@@ -96,7 +95,6 @@ def set_tf_train(train_queue, model, optimizer,eos):
         ce.update(loss.data, n)
         f1_.update(f1, n)
         acc_.update(acc, n)
-#
     return ce.avg, acc_.avg, f1_.avg
 
 def set_tf_valid(queue, model, eos):
@@ -123,7 +121,7 @@ def set_tf_valid(queue, model, eos):
 
             n = encoder_input.size(0)
             ce.update(loss.data, n)
-            ce.update(loss.data, n)
+            # ce.update(loss.data, n)
             f1_.update(f1, n)
             acc_.update(acc, n)
             #
@@ -137,15 +135,18 @@ def main():
         info('No GPU found!')
         sys.exit(1)
     # os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(x) for x in args.gpu)
+    # 全局随机种子（Seed）对齐
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
+    # 配置 cuDNN（NVIDIA 深度神经网络加速库）的底层计算模式。
     cudnn.enabled = True
     cudnn.benchmark = False
     cudnn.deterministic = True
     device = int(args.gpu)
+    # 将解析到的所有命令行参数（配置项）打印/记录到日志中，方便日后查看某次实验是在什么参数设置下跑出来的。
     info(f"Args = {args}")
 
     pkl_dir = f'{base_path}/history/{args.task_name}'

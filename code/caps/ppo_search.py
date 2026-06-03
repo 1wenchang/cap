@@ -37,12 +37,9 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--new_gen', type=int, default=200)
-parser.add_argument('--task_name', type=str, choices=['spectf', 'svmguide3', 'german_credit', 'spam_base',
-                                                      'ionosphere', 'megawatt1', 'uci_credit_card', 'openml_618',
-                                                      'openml_589', 'openml_616', 'openml_607', 'openml_620',
-                                                      'openml_637',
-                                                      'openml_586', 'uci_credit_card', 'higgs', 'ap_omentum_ovary','activity'
-                                                      , 'mice_protein', 'coil-20', 'isolet', 'minist', 'minist_fashion'], default='german_credit')
+parser.add_argument('--task_name', type=str, choices=['spectf', 'svmguide3', 'german_credit', 'uci_credit_card','spam_base','megawatt1','ionosphere',
+                                                      'mice_protein', 'coil-20', 'minist_fashion', 'urbansound8k',
+                                                      'openml_589', 'openml_616', 'IQdataset'], default='svmguide3')
 
 parser.add_argument('--gpu', type=int, default=0, help='used gpu')
 parser.add_argument('--fe', type=str, choices=['+', '', '-'], default='-')
@@ -58,7 +55,7 @@ parser.add_argument('--gamma', type=float, default=0.99)
 parser.add_argument('--search_step', type=int, default=1000)
 parser.add_argument('--ppo_hidden_size', type=int, default=128)
 # 迭代次数
-parser.add_argument('--epoch', type=int, default=1)
+parser.add_argument('--epoch', type=int, default=10)
 parser.add_argument('--set_tf_arch', type=str, choices=['SAB','ISAB'],default='ISAB')
 parser.add_argument('--set_tf_hidden_size', type=int,default=128)
 
@@ -228,6 +225,8 @@ def ppo_search(queue,ppo,set_tf,feat_len, epoches, fe, reward_weight):
 
 
 def generate_new_records(queue,ppo, set_tf, feat_len):
+    # 作用：站在已有的特征组合上，利用 PPO 智能体在连续空间里“走一步”，
+    #      然后让大模型把新位置翻译回离散的特征，试图考出更高的分数！
     with torch.no_grad():
         # inference
         for i, sample in enumerate(queue):

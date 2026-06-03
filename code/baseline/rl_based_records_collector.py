@@ -40,7 +40,7 @@ warnings.filterwarnings('ignore')
 def gen_auto_feature_selection(fe_, task_name_):
     fe_.train.to_hdf(f'{base_path}/history/{task_name_}.hdf', key='raw_train')
     fe_.test.to_hdf(f'{base_path}/history/{task_name_}.hdf', key='raw_test')
-    max_accuracy, optimal_set, k = gen_marlfs(fe_, N_ACTIONS=2, N_STATES=64, EXPLORE_STEPS=100)
+    max_accuracy, optimal_set, k = gen_marlfs(fe_, N_ACTIONS=2, N_STATES=64, EXPLORE_STEPS=300)
     best_train = fe_.generate_data(optimal_set, 'train')
     best_test = fe_.generate_data(optimal_set, 'test')
     best_train.to_hdf(f'{base_path}/history/{task_name_}.hdf', key='marlfs_train')
@@ -65,7 +65,7 @@ def process(task_name_):
 
 if __name__ == '__main__':
 
-    task_list = ['spectf']
+    task_list = ['german_credit']                                  
     for name in task_list:
         task_name = name
         process(task_name)

@@ -196,7 +196,7 @@ class Evaluator(object):
             labels_seed.append(labels[0])
         return torch.cat(h_results, 0), torch.cat(labels, 0), torch.cat(t_results), \
                torch.cat(h_seed), torch.cat(labels_seed),
-
+# 作用：接收掩码，调用底层评委（机器学习模型）跑出准确率/F1分数，并把结果记在小本本上。
     def report_performance(self, choice, store=True, rp=True, flag=''):
         opt_ds = self.generate_data(choice, flag)
         a, b, c, d = test_task_new(opt_ds, task=self.task_type)
@@ -209,6 +209,7 @@ class Evaluator(object):
         else:
             a, b, c, d = self.original_report
         original_report = model_performance[self.task_type](a, b, c, d)
+# 回归任务
         if self.task_type == 'reg':
             final_result = report.rae
             if rp:
@@ -220,6 +221,7 @@ class Evaluator(object):
                      format(original_report.rae, report.rae))
                 info('1-RMSE on original is: {:.4f}, 1-RMSE on generated is: {:.4f}'.
                      format(original_report.rmse, report.rmse))
+# 二分类任务
         elif self.task_type == 'cls':
             final_result = report.f1_score
             if rp:
@@ -231,6 +233,7 @@ class Evaluator(object):
                      format(original_report.f1_score, report.f1_score))
                 info('ROC/AUC on original is: {:.4f}, ROC/AUC on generated is: {:.4f}'.
                      format(original_report.roc_auc, report.roc_auc))
+# 检测任务
         elif self.task_type == 'det':
             final_result = report.ras
             if rp:
@@ -246,6 +249,7 @@ class Evaluator(object):
                 info(
                     'Recall on original is: {:.4f}, Recall Score on generated is: {:.4f}'
                     .format(original_report.recall, report.recall))
+ # 多分类任务
         elif self.task_type == 'mcls':
             final_result = report.mif1
             if rp:
@@ -269,7 +273,7 @@ class FeatureEvaluator(Evaluator):
     def __init__(self, task, task_type=None, dataset=None):
         super().__init__(task, task_type, dataset)
         self.ds_size = self.original.shape[1] - 1
-
+ # 作用：根据智能体给出的 0/1 选择（掩码），对原始数据集进行“切片”，只保留被选中的特征列。
     def generate_data(self, choice, flag=''):
         if choice.shape[0] != self.ds_size:
             error('wrong shape of choice')

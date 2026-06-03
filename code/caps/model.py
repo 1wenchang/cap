@@ -48,21 +48,30 @@ class GAINS(nn.Module):
         return new_feat_seq
 
 class SetTransformer(nn.Module):
+    # ==========================================
+    # 【类总览：特征空间的炼金炉】
+    # 作用：它是一个编码器-解码器架构。
+    #      1. 把离散的 0/1 特征选择（废铁），熔炼成高维连续的浮点数向量（金水）。
+    #      2. 再把金水倒进模具，重新还原成另一组 0/1 的特征选择概率。
+    # ==========================================
     def __init__(self, dim_input, num_outputs, dim_output,args,
             num_inds=32, dim_hidden=128, num_heads=4, ln=True):
         super(SetTransformer, self).__init__()
-        self.arch = args.set_tf_arch
-        self.dim_hidden = args.set_tf_hidden_size
+        self.arch = args.set_tf_arch # 默认是 'ISAB'
+        self.dim_hidden = args.set_tf_hidden_size # 默认是 128 维
         # self.dim_hidden = args.set_tf_hidden_size
+        # 【1. 搭建熔炉（编码器 Encoder）】
         if self.arch == 'ISAB':
+            # ISAB 是高级的注意力机制（带诱导点，算得更快）
             self.enc = nn.Sequential(
                     ISAB(dim_input, self.dim_hidden, num_heads, num_inds, ln=ln),
                     ISAB(self.dim_hidden, self.dim_hidden, num_heads, num_inds, ln=ln))
         elif self.arch == 'SAB':
+            # SAB 是标准的自注意力机制（互相看来看去）
             self.enc = nn.Sequential(
                     SAB(dim_input, self.dim_hidden, num_heads, ln=ln),
                     SAB(self.dim_hidden, self.dim_hidden, num_heads, ln=ln))
-
+        # 【2. 搭建模具（解码器 Decoder）】
         self.dec = nn.Sequential(
                 PMA(self.dim_hidden, num_heads, num_outputs, ln=ln),
                 SAB(self.dim_hidden, self.dim_hidden, num_heads, ln=ln),
@@ -72,15 +81,20 @@ class SetTransformer(nn.Module):
                 )
         self.flatten = nn.Flatten(0,1)
         self.gpu = args.gpu
+    # 【3. 炼金全过程（前向传播）】
     def forward(self, X):
-        X = X.unsqueeze(1)
-        feat_emb = self.enc(X)
+        X = X.unsqueeze(1) # 给数据增加一个维度，满足网络输入的格式要求
+        feat_emb = self.enc(X) # 魔法发生地！离散变连续！
+        # 从连续变回概率预测
         X = self.dec(feat_emb).permute(0,2,1)
         # print(self.dec(feat_emb).shape, X.shape)
         output = self.flatten(X)
+        # 同时返回“中间产物（连续向量）”和“最终预测（概率）”
         return feat_emb, output
+    # 【4. 推理专用（PPO 冲刺时用的）】
     def infer(self, X):
         X = self.dec(X).permute(0,2,1)
+        # torch.max()[1] 就是直接挑出概率最大的那个选项作为答
         output = torch.max(X,dim=-1)[1]
         return output
 
